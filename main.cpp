@@ -1,206 +1,216 @@
 #include <iostream>
-#include <fstream>
+#include <list>
 #include <vector>
-#include <queue>
+#include <map>
 #include <unordered_map>
+#include <fstream>
 #include <string>
- 
-/* Структура Node, представляющая узел в дереве Хаффмана */
-struct Node
-{
-    char m_char;               // Символ, представленный этим узлом
-    int m_frequency;           // Частота этого символа в исходном тексте
-    Node* m_left;              // Указатель на левого потомка этого узла
-    Node* m_right;             // Указатель на правого потомка этого узла
- 
-    /* Конструктор для создания нового узла */
-    Node(char m_char, int m_frequency, Node* m_left = nullptr, Node* m_right = nullptr)
-        : m_char(m_char), m_frequency(m_frequency), m_left(m_left), m_right(m_right) {}
-};
- 
-/* Класс HuffmanTree */
+#include <algorithm>
+
 class HuffmanTree
 {
+public:
+    class Node;                                                                                         // Класс "Узел"
+
+    HuffmanTree();                                                                                      // Конструктор
+
+    ~HuffmanTree();                                                                                     // Деструктор
+
+    void BuildHuffmanTree(const std::string& text);                                                     // Построение дерева Хаффмана
+
+    std::string Encode(char symbol) const;                                                              // Кодирование отдельного символа
+
+    std::pair<std::string, double> Encode(const std::string& text) const;                               // Кодирование текста
+
+    std::string Decode(const std::string& text) const;                                                  // Декодирование текста
+
 private:
-    Node* root;                 // Корень дерева Хаффмана
- 
-    /*
-    Структура NodeComparator используется для сравнения двух узлов по их частотам.
-    Это нужно для построения очереди с приоритетами, где узлы с меньшей частотой имеют более высокий приоритет.
-    */
-    struct NodeComparator
+    Node* m_root = nullptr;
+
+    void DestructorAuxiliary(Node* node);                                                               // Удаление дерева
+
+    void EncodeAuxiliary(Node* node, char symbol, std::string currentCode, std::string& encodedSymbol) const;
+};
+
+/* Класс "Узел" */
+class HuffmanTree::Node
+{
+public:
+    char m_char;
+    int m_frequency;
+    Node* m_left;
+    Node* m_right;
+
+    Node(char huffmanChar, int frequency, Node* m_left = nullptr, Node* m_right = nullptr)
+        : m_char(huffmanChar), m_frequency(frequency), m_left(m_left), m_right(m_right) {}
+
+};
+
+/* Конструктор */
+HuffmanTree::HuffmanTree()
+{
+    m_root = nullptr;
+}
+
+/* Деструктор */
+HuffmanTree::~HuffmanTree()
+{
+    DestructorAuxiliary(m_root);
+}
+
+void HuffmanTree::DestructorAuxiliary(Node* node)
+{
+    if (node)
     {
-        bool operator()(Node* left, Node* right)
-        {
-            return left->m_frequency > right->m_frequency;
-        }
-    };
- 
-    void BuildTree(const std::unordered_map<char, int>& frequencyMap)
-    {
-        std::priority_queue<Node*, std::vector<Node*>, NodeComparator> minHeap;
- 
-        for (auto pair : frequencyMap)
-        {
-            minHeap.push(new Node(pair.first, pair.second));
-        }
- 
-        while (minHeap.size() != 1)
-        {
-            Node* m_left = minHeap.top(); minHeap.pop();
-            Node* m_right = minHeap.top(); minHeap.pop();
- 
-            int sum = m_left->m_frequency + m_right->m_frequency;
-            minHeap.push(new Node('\0', sum, m_left, m_right));
-        }
- 
-        root = minHeap.top();
+        DestructorAuxiliary(node->m_left);
+        DestructorAuxiliary(node->m_right);
+
+        delete node;
     }
- 
-    /* Функция encodeHelper, рекурсивно обходящая дерево Хаффмана и строящая коды Хаффмана для каждого символа */
-    void EncodeHelper(Node* node, std::string str, std::unordered_map<char, std::string>& huffmanCode)
+}
+
+/* Построение дерева Хаффмана */
+void HuffmanTree::BuildHuffmanTree(const std::string& text)
+{
+    std::unordered_map<char, int> frequencyMap;
+
+    for (char huffmanChar : text)
     {
-        /* Если узел пуст, просто возвращаемся */
-        if (node == nullptr)
+        if (frequencyMap.count(huffmanChar) == 0)
         {
-            return;
+            frequencyMap[huffmanChar] = 1;
         }
- 
-        /* Если узел является листом (то есть у него нет дочерних узлов),
-        то мы достигли символа и добавляем текущую строку в качестве его кода Хаффмана
-        */
-        if (!node->m_left && !node->m_right)
+        else
         {
-            huffmanCode[node->m_char] = str;
+            frequencyMap[huffmanChar]++;
         }
- 
-        /* Рекурсивно обходим левое поддерево, добавляя '0' к текущей строке */
-        EncodeHelper(node->m_left, str + "0", huffmanCode);
-        /* Рекурсивно обходим правое поддерево, добавляя '1' к текущей строке */
-        EncodeHelper(node->m_right, str + "1", huffmanCode);
     }
 
-public:
-    /*
-    Конструктор класса HuffmanTree, который принимает map символов и их частот
-    При создании объекта HuffmanTree, дерево Хаффмана строится автоматически
-    */
-    HuffmanTree(const std::unordered_map<char, int>& frequencyMap)
+    std::list<Node*> nodeList;
+
+    for (auto& element : frequencyMap)
     {
-        BuildTree(frequencyMap);
+        nodeList.push_back(new Node(element.first, element.second));
     }
- 
-    /*
-    Функция calculateFrequencies считывает файл и вычисляет частоту каждого символа в файле.
-    Возвращает map, где ключ - это символ, а значение - его частота
-    */
-    static std::unordered_map<char, int> calculateFrequencies(std::ifstream& inputFile)
+
+    /* Сортируем по возрастанию частоты символов в узлах */
+    while (nodeList.size() != 1)
     {
-        std::unordered_map<char, int> frequencyMap;
-        char m_char;
- 
-        while (inputFile.get(m_char))
-        {
-            frequencyMap[m_char]++;
-        }
- 
-        return frequencyMap;
-    }
- 
-    /*
-    Функция encode кодирует исходный файл с использованием дерева Хаффмана и записывает результат в выходной файл.
-    Возвращает коэффициент сжатия
-    */
-    double Encode(std::ifstream& inputFile, std::ofstream& outputFile)
-    {
-        inputFile.clear();                                                          // Сбросить состояние файла
-        inputFile.seekg(0);                                                         // Переместить указатель чтения в начало файла
-        std::unordered_map<char, int> frequencyMap = calculateFrequencies(inputFile);
-        BuildTree(frequencyMap);
- 
-        inputFile.clear();
-        inputFile.seekg(0);
-        std::string str((std::istreambuf_iterator<char>(inputFile)), std::istreambuf_iterator<char>());
- 
-        std::unordered_map<char, std::string> huffmanCode;
-        EncodeHelper(root, "", huffmanCode);
- 
-        std::string encodedStr;
-        for (char m_char : str)
-        {
-            encodedStr += huffmanCode[m_char];
-        }
- 
-        outputFile << encodedStr;
- 
-        double compressionRatio = (double)encodedStr.size() / (str.size() * 8);
- 
-        return compressionRatio;
-    }
- 
- 
-    bool Decode(std::ifstream& inputFile, std::ofstream& outputFile)
-    {
-        /* Считываем закодированную строку из файла */
-        std::string encodedStr((std::istreambuf_iterator<char>(inputFile)), std::istreambuf_iterator<char>());
- 
-        Node* node = root;
-        std::string decodedStr;
- 
-        /* Декодируем строку */
-        for (char bit : encodedStr)
-        {
-            if (bit == '0')
+        nodeList.sort([](Node* left, Node* right)
             {
-                node = node->m_left;
-            }
-            else if (bit == '1')
-            {
-                node = node->m_right;
-            }
- 
-            /* Если достигли листа, добавляем символ в декодированную строку и возвращаемся к корню */
-            if (node->m_left == nullptr && node->m_right == nullptr)
-            {
-                decodedStr += node->m_char;
-                node = root;
-            }
-        }
- 
-        /* Записываем декодированную строку в выходной файл */
-        outputFile << decodedStr;
- 
-        return true;
+                return left->m_frequency < right->m_frequency;
+            });
+
+        /* Извлекаем два узла с наименьшей частотой из начала списка */
+        Node* node1 = nodeList.front();
+        nodeList.pop_front();
+        Node* node2 = nodeList.front();
+        nodeList.pop_front();
+
+        Node* newNode = new Node('\0', node1->m_frequency + node2->m_frequency, node1, node2);
+        nodeList.push_back(newNode);
     }
-};
- 
- 
-void WriteEncodedFile(std::ofstream& outputFile, const std::string& encodedStr)
-{
-    outputFile << encodedStr;
+
+    m_root = nodeList.front();
+    nodeList.pop_front();
 }
- 
+
+/* Кодирование отдельного символа, текста */
+std::string HuffmanTree::Encode(char symbol) const
+{
+    std::string encodedSymbol = "";
+    EncodeAuxiliary(m_root, symbol, "", encodedSymbol);
+
+    return encodedSymbol;
+}
+
+std::pair<std::string, double> HuffmanTree::Encode(const std::string& text) const
+{
+    std::string encodedText = "";
+
+    for (char huffmanChar : text)
+    {
+        encodedText += Encode(huffmanChar);
+    }
+
+    double compressioRatio = (static_cast<double>(text.size()) * 8) / encodedText.size();
+
+    return std::make_pair(encodedText, compressioRatio);
+}
+
+void HuffmanTree::EncodeAuxiliary(Node* node, char symbol, std::string currentCode, std::string& encodedSymbol) const
+{
+    if (!node)
+    {
+        return;
+    }
+
+    if (node->m_char == symbol)
+    {
+        encodedSymbol = currentCode;
+
+        return;
+    }
+
+    EncodeAuxiliary(node->m_left, symbol, currentCode + "0", encodedSymbol);
+    EncodeAuxiliary(node->m_right, symbol, currentCode + "1", encodedSymbol);
+}
+
+/* Декодирование текста */
+std::string HuffmanTree::Decode(const std::string& text) const
+{
+    std::string decodedText = "";
+    Node* currentNode = m_root;
+
+    for (char huffmanChar : text)
+    {
+        if (huffmanChar == '0')
+        {
+            currentNode = currentNode->m_left;
+        }
+        else
+        {
+            currentNode = currentNode->m_right;
+        }
+
+        if (!currentNode->m_left && !currentNode->m_right)
+        {
+            decodedText += currentNode->m_char;
+            currentNode = m_root;
+        }
+    }
+
+    return decodedText;
+}
+
 int main()
 {
     setlocale(LC_ALL, "Russian");
+
     std::ifstream inputFile("input.txt");
-    std::unordered_map<char, int> freqMap = HuffmanTree::calculateFrequencies(inputFile);
-    HuffmanTree huffmanTree(freqMap);
- 
+    std::string text((std::istreambuf_iterator<char>(inputFile)), std::istreambuf_iterator<char>());
+
+    HuffmanTree labHuffmanTree;
+    labHuffmanTree.BuildHuffmanTree(text);
+
+    auto result = labHuffmanTree.Encode(text);
+    std::string encodedText = result.first;
+    double compressionRatio = result.second;
+    std::cout << "Коэффициент сжатия: " << compressionRatio << std::endl;
+
     std::ofstream encodedFile("encoded.txt");
-    double compressionRatio = huffmanTree.Encode(inputFile, encodedFile);
-    std::cout << "Степень сжатия: " << compressionRatio << std::endl;
- 
-    inputFile.close();
+    encodedFile << encodedText;
     encodedFile.close();
- 
+
     std::ifstream encodedInputFile("encoded.txt");
+    std::string encodedInputText((std::istreambuf_iterator<char>(encodedInputFile)), std::istreambuf_iterator<char>());
+
+    std::string decodedText = labHuffmanTree.Decode(encodedInputText);
     std::ofstream decodedFile("decoded.txt");
-    bool isDecoded = huffmanTree.Decode(encodedInputFile, decodedFile);
-    std::cout << "Декодированние прошло " << (isDecoded ? "успешно" : "неудачно") << std::endl;
- 
-    encodedInputFile.close();
+    decodedFile << decodedText;
     decodedFile.close();
- 
+
+    std::cout << "Декодирование прошло " << ((text == decodedText) ? "успешно" : "неудачно") << std::endl;
+
     return 0;
 }
